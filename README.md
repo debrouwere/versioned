@@ -1,0 +1,1 @@
+`python-versioning` implements a very common way to version files, using hardlinks to create snapshots, with `latest.ext` always referring to the latest version and other versions named according to when they were created.
