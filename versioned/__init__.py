@@ -1,51 +1,51 @@
-""" Versioned.
+"""
+Versioned v0.1
 
 Usage:
-    versioned [<dest>] <src> -sndc
+    versioned (init | update) <dest> [options]
+    versioned rm <dest> [options]
+    versioned ls <dest> [options]
+    versioned <dest> [<src>] [options]
 
 Options:
-    -s --max-size <size>        Prune old versions once the directory grows over a certain size.
-    -n --max-snapshots <n>      ...
-    -d --max-days <days>        ...
-    -c --save-configuration     ...
+    -s --max-size <size>        Prune old snapshots to keep the directory under a certain size.
+    -n --max-snapshots <n>      Prune snapshots beyond the latest <n>.
+    -d --max-days <days>        Prune snapshots older than <days>.
+    -r --range <range>...       List snapshots in a range. Get the latest snapshot using `head`, 
+                                a range of older snapshots using `-5 -2`, snapshots that are
+                                between a certain age using `-9d -4d` and snapshots from a 
+                                certain year, month or day using `2014`, `2014-05` and so on.
+    -k --keep                   When adding a file from <src> to the versioned directory, 
+                                also keep the file in its original location.
 
-- if dest exists and is a versioned directory (assessed by the presence of a latest.ext file), apply any housekeeping that's required (pruning old versions)
-- if dest exists and is a file, move it to a same-named versioned directory
-- if anything is passed on stdin, this becomes the latest version
-- versioned will look for .versioned in that directory, which optionally contains housekeeping rules
-versioned <src> <dest>
-- same mechanics
+Arguments:
+    <dest>      The path to either the versioned directory or the file you wish to start versioning.
+    <src>       The path to the file that should be 
+
+When initializing a versioned directory, you should refer to it with the desired extension 
+of the files that it will contain at the end. `example.txt` will result in a versioned
+directory called `example` being created, and all the files therein will have the `.txt`
+extension. From then on, you can refer to your versioned directory with or without extension
+tacked on.
 """
 
+import sys
 import os
+import json
 from datetime import datetime, timedelta
 import functools
 from dateutil.parser import parse as dateparse
 from docopt import docopt
 
 
-def to_args(obj):
-    lines = map(' '.join, obj.items)
-    return '\n'.join(lines)
+def set_configuration(target, **options):
+    config = os.path.join(target, '.versioned')
+    json.dump(options, open(config, 'w'), indent=4)
 
-def from_args(str):
-    lines = str.strip().split('\n')
-    pairs = map(lambda line: line.split(' ', 1), lines)
-    return dict(pairs)
-
-def dump_args(obj, f):
-    f.write(to_ini(obj))
-    f.close()
-
-def load_args(f):
-    obj = from_ini(f.read())
-    f.close()
-    return obj
-
-def get_configuration(options):
-    config = os.path.join(dest, '.versioned')
+def get_configuration(target, **options):
+    config = os.path.join(target, '.versioned')
     if os.path.exists(config):
-        defaults = load_args(config)
+        defaults = json.load(open(config))
     else:
         defaults = {}
     defaults.update(options)
@@ -62,7 +62,7 @@ def prune(path, **options):
     config = get_configuration(options)
 
     # TODO: exclude `latest.ext`!
-    files = [f for f in files os.listdir(path) if os.isfile(f)]
+    files = [f for f in os.listdir(path) if os.isfile(f)]
     matches = [f for f in files if f.endswith(extension)]
 
     if '--max-snapshots' in options:
@@ -94,11 +94,57 @@ def prune(path, **options):
         del options['--save-configuration']
         dump_args(config, open('.versioned', 'w'))
 
-def version(dest, src=None):
-    dest, extension = os.path.splitext(dest)
-    is_versioned = os.path.exists(os.path.join(dest, 'latest' + extension))
-    now = datetime.now().replace(microsecond=0).isoformat()    
+
+def version(target, source=None):
+    config = get_configuration(target)
+    now = datetime.now().replace(microsecond=0).isoformat().replace(':', '')
+
+    print 'source', source
+
+    if source:
+        source = open(source)
+    else:
+        source = sys.stdin
+
+    dest = os.path.join(target, now + config['extension'])
+    latest = os.path.join(target, 'latest' + config['extension'])
+
+    with open(dest, 'w') as f:
+        f.write(source.read())
+
+    if os.path.exists(latest):
+        os.remove(latest)
+
+    os.link(dest, latest)
+
+def init(target, size=None, snapshots=None, days=None):
+    root, extension = os.path.splitext(target)
+    
+    if os.path.exists(target):
+        is_versioned = os.path.exists(os.path.join(root, '.versioned'))
+        if not is_versioned:
+            raise Exception("Directory already exists and is not versioned.")
+    else:
+        os.mkdir(root)
+
+    set_configuration(root, size=size, snapshots=snapshots, days=days, extension=extension)
+    return (root, extension)
+
 
 if __name__ == '__main__':
     arguments = docopt(__doc__, version='Versioned 0.1')
-    
+    print arguments    
+
+    target = arguments['<dest>']
+    source = arguments['<src>']
+    days = arguments['--max-days']
+    size = arguments['--max-size']
+    snapshots = arguments['--max-snapshots']
+
+    if arguments.get('init'):
+        init(target, size, snapshots, days)
+    else:
+        version(target, source)
+
+    # print sys.stdin.isatty()
+    # print sys.stdout.isatty()
