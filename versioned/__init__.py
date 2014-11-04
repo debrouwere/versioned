@@ -1,13 +1,23 @@
 """
-Versioned v0.1
+# Versioned v0.1
+
+Versioning is a user-friendly interface to a very common way of versioning files, which 
+creates a snapshot on every save, using hardlinks, with `latest.ext` always referring 
+to the latest version and other versions named according to when they were created.
+
+You can use it on the command line or from Python.
+
+**Status:** unstable.
 
 Usage:
+
     versioned (init | update) <dest> [options]
     versioned rm <dest> [options]
     versioned ls <dest> [options]
     versioned <dest> [<src>] [options]
 
 Options:
+
     -s --max-size <size>        Prune old snapshots to keep the directory under a certain size.
     -n --max-snapshots <n>      Prune snapshots beyond the latest <n>.
     -d --max-days <days>        Prune snapshots older than <days>.
